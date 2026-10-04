@@ -1,13 +1,12 @@
 <template>
-  <section class="page" data-module="fireteam">
+  <section class="page" data-module="allocation">
     <header class="page-head">
       <div>
-        <h2>扑火队伍管理</h2>
-        <p class="page-desc">维护扑火队伍，围绕队伍编号、队伍名称、所属林场、队长姓名做登记、筛选与状态流转。</p>
+        <h2>物资调拨台账</h2>
+        <p class="page-desc">跨林场借用装备产生的防火物资调拨台账，围绕台账编号、调拨单号、调出林场、调入林场做登记、筛选与状态流转。</p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记扑火队伍</button>
-        <button class="btn" type="button" @click="exportRows">导出扑火队伍清单</button>
+        <button class="btn" type="button" @click="exportRows">导出调拨台账</button>
       </div>
     </header>
 
@@ -58,13 +57,13 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无扑火队伍数据，可先登记扑火队伍</td>
+          <td :colspan="columns.length + 2" class="empty-state">暂无调拨台账，跨场借用确认后自动生成</td>
         </tr>
       </tbody>
     </table>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条扑火队伍记录</span>
+      <span>共 {{ total }} 笔调拨台账记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -81,11 +80,15 @@ import {
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
 
-const meta = moduleMeta('fireteam')
-const columns = ["队伍编号", "队伍名称", "所属林场", "队长姓名", "队员人数", "集结半径", "值班状态", "出动状态"]
-const actions = ["下达出动", "转入休整", "撤回队伍", "归队提醒"]
-const statuses = ["在营待命", "已出动", "扑救中", "已撤回", "休整中"]
-const stats = [{"label": "队伍总数", "value": 0}, {"label": "待命队伍", "value": 0}, {"label": "出动队伍", "value": 0}]
+const meta = moduleMeta('allocation')
+const columns = ["台账编号", "调拨单号", "装备编号", "装备名称", "调出林场", "调入林场", "调拨数量", "台账状态"]
+const actions = ["确认调拨", "登记归还"]
+const statuses = ["待调拨", "已调拨", "已归还"]
+const stats = computed(() => [
+  { label: "调拨笔数", value: rows.value.length },
+  { label: "待调拨数", value: rows.value.filter((row) => String(row.status) === '待调拨').length },
+  { label: "已归还数", value: rows.value.filter((row) => String(row.status) === '已归还').length },
+])
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -108,10 +111,6 @@ function exportRows() {
   downloadEntries(meta.key)
 }
 
-function openCreate() {
-  errorMessage.value = '扑火队伍登记入口尚未接入审批流'
-}
-
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
@@ -129,7 +128,7 @@ function reload() {
     rows.value = payload.items
     total.value = payload.total
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '扑火队伍列表读取失败'
+    errorMessage.value = error instanceof Error ? error.message : '调拨台账列表读取失败'
   }
 }
 

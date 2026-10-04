@@ -2,6 +2,13 @@ import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
+import {
+  cancelBorrowPlan,
+  confirmBorrowPlan,
+  writeOffBorrowPlan,
+  writeOffByTeam,
+} from './borrow-service'
+
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
 
@@ -30,6 +37,13 @@ export function listEntries(key: string, filters: Record<string, string> = {}): 
 
 export function runAction(key: string, id: number, action: string): ActionResult {
   const meta = moduleMeta(key)
+  // 共享借用编排的动作牵动多个模块，委托给编排服务做事务式落库。
+  if (key === 'borrowplan') {
+    if (action === '确认编排') return confirmBorrowPlan(id)
+    if (action === '核销占用') return writeOffBorrowPlan(id, '值班员手动核销')
+    if (action === '取消编排') return cancelBorrowPlan(id)
+    return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
+  }
   const target = meta.actionTargets[action]
   if (!target) {
     return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
@@ -53,6 +67,23 @@ export function runAction(key: string, id: number, action: string): ActionResult
   const next = [...rows]
   next[index] = updated
   saveRows(key, next)
+  // 扑火队伍归队（撤回/归队提醒）时，联动核销该队伍已确认编排的领用占用。
+  if (key === 'fireteam' && target === '已撤回') {
+    try {
+      const released = writeOffByTeam(String(updated['队伍名称'] ?? ''))
+      if (released > 0) {
+        return {
+          ok: true,
+          message: `${meta.entity}已${action}，当前状态「${target}」；联动核销 ${released} 张借用编排的领用占用`,
+        }
+      }
+    } catch (error) {
+      return {
+        ok: true,
+        message: `${meta.entity}已${action}，当前状态「${target}」；但联动核销失败：${error instanceof Error ? error.message : '存储写入异常'}，请到共享借用编排手动核销`,
+      }
+    }
+  }
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 

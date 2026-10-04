@@ -48,6 +48,21 @@ export function saveRows(key: string, rows: EntryRow[]): void {
   }
 }
 
+// 多模块同次落库：调用方先在校验通过后一次性提交，任一键写入失败就回退内存缓存，整体不生效。
+export function saveModules(patch: Record<string, EntryRow[]>): void {
+  const previous = allRows()
+  const next = { ...previous, ...patch }
+  cache = next
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    } catch (error) {
+      cache = previous
+      throw error
+    }
+  }
+}
+
 export function resetRows(key: string): EntryRow[] {
   const rows = clone(SEED_ROWS[key] ?? [])
   saveRows(key, rows)
