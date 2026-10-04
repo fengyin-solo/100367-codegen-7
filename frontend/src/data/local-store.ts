@@ -48,6 +48,21 @@ export function saveRows(key: string, rows: EntryRow[]): void {
   }
 }
 
+// 多模块同次落库：一次 setItem 写完，写不进去就恢复缓存快照，调用方按失败处理（整体回退）。
+export function saveAll(entries: Record<string, EntryRow[]>): void {
+  const prev = allRows()
+  const next = { ...prev, ...entries }
+  cache = next
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    } catch (error) {
+      cache = prev
+      throw error
+    }
+  }
+}
+
 export function resetRows(key: string): EntryRow[] {
   const rows = clone(SEED_ROWS[key] ?? [])
   saveRows(key, rows)
